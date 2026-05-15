@@ -5,7 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Zoom Transcript Cleaner</title>
     <style>
-      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
 
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -37,7 +43,9 @@
         border-radius: 12px;
         text-align: center;
         user-select: none;
-        transition: border-color 0.15s, background 0.15s;
+        transition:
+          border-color 0.15s,
+          background 0.15s;
       }
 
       body.loaded #dropzone {
@@ -55,15 +63,34 @@
         background: #f0f4ff !important;
       }
 
-      #dropzone.error { border-color: #dc2626; background: #fef2f2; }
-      #dropzone.error #status { color: #dc2626; }
+      #dropzone.error {
+        border-color: #dc2626;
+        background: #fef2f2;
+      }
+      #dropzone.error #status {
+        color: #dc2626;
+      }
 
       body.loaded .drop-icon,
-      body.loaded h1 { display: none; }
+      body.loaded h1 {
+        display: none;
+      }
 
-      .drop-icon { font-size: 48px; margin-bottom: 16px; }
-      h1 { font-size: 18px; font-weight: 600; color: #111; margin-bottom: 8px; }
-      #status { font-size: 13px; color: #666; line-height: 1.5; }
+      .drop-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+      }
+      h1 {
+        font-size: 18px;
+        font-weight: 600;
+        color: #111;
+        margin-bottom: 8px;
+      }
+      #status {
+        font-size: 13px;
+        color: #666;
+        line-height: 1.5;
+      }
 
       /* === Toolbar === */
       #toolbar {
@@ -75,7 +102,9 @@
         gap: 16px;
       }
 
-      body.loaded #toolbar { display: flex; }
+      body.loaded #toolbar {
+        display: flex;
+      }
 
       #toolbar label {
         display: flex;
@@ -87,7 +116,6 @@
       }
 
       #copy-btn {
-        margin-left: auto;
         padding: 6px 16px;
         background: #fff;
         color: #333;
@@ -98,7 +126,9 @@
         cursor: pointer;
       }
 
-      #copy-btn:hover { background: #f5f5f5; }
+      #copy-btn:hover {
+        background: #f5f5f5;
+      }
 
       #download-btn {
         margin-left: 8px;
@@ -112,7 +142,9 @@
         cursor: pointer;
       }
 
-      #download-btn:hover { background: #444; }
+      #download-btn:hover {
+        background: #444;
+      }
 
       /* === Transcript preview === */
       #preview-wrap {
@@ -122,7 +154,9 @@
         padding: 40px 48px;
       }
 
-      body.loaded #preview-wrap { display: block; }
+      body.loaded #preview-wrap {
+        display: block;
+      }
 
       #preview {
         max-width: 760px;
@@ -133,12 +167,15 @@
         color: #1a1a1a;
       }
 
-      #preview p { margin-bottom: 0.85em; }
-      #preview p:last-child { margin-bottom: 0; }
+      #preview p {
+        margin-bottom: 0.85em;
+      }
+      #preview p:last-child {
+        margin-bottom: 0;
+      }
     </style>
   </head>
   <body>
-
     <div id="drop-area">
       <div id="dropzone">
         <div class="drop-icon">📄</div>
@@ -148,12 +185,12 @@
     </div>
 
     <div id="toolbar">
+      <button id="download-btn">Download .txt</button>
+      <button id="copy-btn">Copy Speaker Text with AI Quote Finder Prompt</button>
       <label>
         <input type="checkbox" id="filter-cb" checked />
         <span id="filter-label">Guest only</span>
       </label>
-      <button id="copy-btn">Copy for Claude</button>
-      <button id="download-btn">Download .txt</button>
     </div>
 
     <div id="preview-wrap">
@@ -170,14 +207,18 @@
         "all right.",
         "awesome!",
         "awesome.",
+        "Definitely.",
+        "That's fascinating.",
         "hmm!",
         "hmm, mm-hmm.",
         "hmm.",
         "hmm...",
         "hmm…",
+        "Nope.",
         "it's okay.",
         "love it.",
         "mm-hmm.",
+        "Mm-hmm, sure.",
         "oh okay!",
         "oh okay.",
         "oh, good point.",
@@ -194,10 +235,13 @@
         "okay.",
         "right.",
         "right?",
+        "Right, right.",
         "so.",
         "so…",
         "sure!",
         "sure.",
+        "Sure, um…",
+        "That's… that's awesome.",
         "totally good.",
         "um, so…",
         "wow!",
@@ -211,6 +255,7 @@
         "yeah, that's awesome.",
         "yeah.",
         "yep.",
+        "yes.",
       ]);
 
       let baseFilename = "transcript";
@@ -235,14 +280,17 @@
 
       function removeFiller(text) {
         const sentences = text.split(/(?<=[.!?…])\s+/);
-        const kept = sentences.filter((s) => !FILLERS.has(s.toLowerCase().trim()));
+        const kept = sentences
+          .filter((s) => !FILLERS.has(s.toLowerCase().trim()))
+          .map((s) => {
+            const stripped = s.replace(/^(?:um|uh)(?:,|…|\.\.\.)\s*/i, "");
+            return stripped !== s ? stripped.charAt(0).toUpperCase() + stripped.slice(1) : s;
+          });
         return kept.join(" ").trim();
       }
 
       function clean(entries) {
-        const filtered = entries
-          .map((e) => ({ ...e, text: removeFiller(e.text) }))
-          .filter((e) => e.text.length > 0);
+        const filtered = entries.map((e) => ({ ...e, text: removeFiller(e.text) })).filter((e) => e.text.length > 0);
 
         const merged = [];
         for (const entry of filtered) {
@@ -263,7 +311,7 @@
         return rows
           .map((r) => {
             const line = `${esc(r.speaker)}: ${esc(r.text)}`;
-            return r.speaker === HOST ? `<p><strong>${line}</strong></p>` : `<p>${line}</p>`;
+            return r.speaker === HOST ? `<p>${line}</p>` : `<p><strong>${line}</strong></p>`;
           })
           .join("");
       }
@@ -274,22 +322,20 @@
         for (const p of document.getElementById("preview").querySelectorAll("p")) {
           const text = p.textContent.trim();
           if (!text) continue;
-          const isHost = !!p.querySelector("strong, b");
+          const isHost = !p.querySelector("strong, b");
           const sep = text.indexOf(": ");
-          rows.push(
-            sep > -1
-              ? { speaker: text.slice(0, sep), text: text.slice(sep + 2), isHost }
-              : { speaker: "", text, isHost }
-          );
+          rows.push(sep > -1 ? { speaker: text.slice(0, sep), text: text.slice(sep + 2), isHost } : { speaker: "", text, isHost });
         }
         return rows;
       }
 
-      function handleCopyForClaude() {
+      function handleCopyForAI() {
+        const guestOnly = document.getElementById("filter-cb").checked;
         const rows = getRowsFromPreview();
-        const transcript = rows
+        const filtered = guestOnly ? rows.filter((r) => !r.isHost) : rows;
+        const transcript = filtered
           .filter((r) => r.text)
-          .map((r) => (r.speaker ? `${r.speaker}: ${r.text}` : r.text))
+          .map((r) => (guestOnly ? r.text : r.speaker ? `${r.speaker}: ${r.text}` : r.text))
           .join("\n\n");
 
         const prompt =
@@ -299,7 +345,7 @@
         navigator.clipboard.writeText(prompt).then(() => {
           const btn = document.getElementById("copy-btn");
           btn.textContent = "Copied!";
-          setTimeout(() => (btn.textContent = "Copy for Claude"), 2000);
+          setTimeout(() => (btn.textContent = "Copy for AI"), 2000);
         });
       }
 
@@ -370,7 +416,7 @@
         reader.readAsText(file);
       }
 
-      document.getElementById("copy-btn").addEventListener("click", handleCopyForClaude);
+      document.getElementById("copy-btn").addEventListener("click", handleCopyForAI);
       document.getElementById("download-btn").addEventListener("click", handleDownload);
 
       document.addEventListener("dragover", (e) => {
