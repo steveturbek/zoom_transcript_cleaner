@@ -180,7 +180,7 @@
       <div id="dropzone">
         <div class="drop-icon">📄</div>
         <h1>Zoom Transcript Cleaner</h1>
-        <p id="status">Drop <strong>meeting_saved_closed_caption.txt</strong> anywhere on this page</p>
+        <p id="status">Drop the <strong>Zoom meeting folder</strong> or <strong>meeting_saved_closed_caption.txt</strong> anywhere on this page</p>
       </div>
     </div>
 
@@ -407,9 +407,9 @@
         if (message) document.getElementById("status").innerHTML = message;
       }
 
-      function processFile(file) {
+      function processFile(file, folderName) {
         if (!file || !file.name.endsWith(".txt")) {
-          setState("error", "Please drop a <strong>.txt</strong> file");
+          setState("error", "Please drop a <strong>.txt</strong> file or Zoom folder");
           return;
         }
 
@@ -423,7 +423,8 @@
             }
 
             const { rows, stats } = clean(entries);
-            baseFilename = file.name.replace(/\.txt$/i, "");
+            baseFilename = folderName || file.name.replace(/\.txt$/i, "");
+            const displayName = folderName ? `📁 ${folderName}` : file.name;
 
             const guestNames = [...new Set(rows.filter((r) => r.speaker !== HOST).map((r) => r.speaker))];
             const labelName = guestNames.length === 1 ? guestNames[0] : "guests";
@@ -431,7 +432,7 @@
 
             document.getElementById("preview").innerHTML = renderPreview(rows);
             document.body.classList.add("loaded");
-            setState("", `${rows.length} rows &middot; ${stats.fillerPct}% fillers removed &middot; ${esc(HOST)}: ${stats.hostPct}% &middot; ${esc(labelName)}: ${stats.guestPct}% &middot; ${esc(file.name)}`);
+            setState("", `${rows.length} rows &middot; ${stats.fillerPct}% fillers removed &middot; ${esc(HOST)}: ${stats.hostPct}% &middot; ${esc(labelName)}: ${stats.guestPct}% &middot; ${esc(displayName)}`);
           } catch (err) {
             setState("error", `Error: ${err.message}`);
           }
@@ -455,7 +456,23 @@
       document.addEventListener("drop", (e) => {
         e.preventDefault();
         document.getElementById("dropzone").classList.remove("dragover");
-        processFile(e.dataTransfer.files[0]);
+
+        const item = e.dataTransfer.items && e.dataTransfer.items[0];
+        const entry = item && item.webkitGetAsEntry && item.webkitGetAsEntry();
+
+        if (entry && entry.isDirectory) {
+          const folderName = entry.name;
+          entry.createReader().readEntries((children) => {
+            const txtEntry = children.find((c) => c.isFile && c.name.endsWith(".txt"));
+            if (!txtEntry) {
+              setState("error", "No .txt file found inside the dropped folder");
+              return;
+            }
+            txtEntry.file((file) => processFile(file, folderName));
+          }, () => setState("error", "Could not read the dropped folder"));
+        } else {
+          processFile(e.dataTransfer.files[0]);
+        }
       });
     </script>
   </body>
