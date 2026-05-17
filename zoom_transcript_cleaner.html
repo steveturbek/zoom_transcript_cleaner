@@ -359,13 +359,13 @@
           content = guestRows.map((r) => r.text).join("\n\n");
           const guestNames = [...new Set(rows.filter((r) => !r.isHost && r.speaker).map((r) => r.speaker))];
           const slug = (guestNames[0] || "guest").replace(/\s+/g, "_");
-          filename = `${slug}.txt`;
+          filename = `${baseFilename}_CLEANED_${slug}_ONLY.txt`;
         } else {
           content = rows
             .filter((r) => r.text)
             .map((r) => (r.speaker ? `${r.speaker}: ${r.text}` : r.text))
             .join("\n\n");
-          filename = `${baseFilename}_cleaned.txt`;
+          filename = `${baseFilename}_CLEANED.txt`;
         }
 
         const blob = new Blob([content], { type: "text/plain" });
