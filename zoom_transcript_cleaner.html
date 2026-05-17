@@ -281,7 +281,7 @@
       function removeFiller(text) {
         const sentences = text.split(/(?<=[.!?…])\s+/);
         const kept = sentences
-          .filter((s) => !FILLERS.has(s.toLowerCase().trim()))
+          .filter((s) => !FILLERS.has(s.replace(/^-\s*/, "").toLowerCase().trim()))
           .map((s) => {
             const stripped = s.replace(/^(?:um|uh)(?:,|…|\.\.\.)\s*/i, "");
             return stripped !== s ? stripped.charAt(0).toUpperCase() + stripped.slice(1) : s;
@@ -290,7 +290,9 @@
       }
 
       function clean(entries) {
-        const filtered = entries.map((e) => ({ ...e, text: removeFiller(e.text) })).filter((e) => e.text.length > 0);
+        const filtered = entries
+          .map((e) => ({ ...e, text: removeFiller(e.text).replace(/^-\s*/, "").trim() }))
+          .filter((e) => e.text.length > 1);
 
         const merged = [];
         for (const entry of filtered) {
