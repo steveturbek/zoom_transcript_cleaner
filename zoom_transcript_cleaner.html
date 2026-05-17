@@ -286,12 +286,18 @@
             const stripped = s.replace(/^(?:um|uh)(?:,|…|\.\.\.)\s*/i, "");
             return stripped !== s ? stripped.charAt(0).toUpperCase() + stripped.slice(1) : s;
           });
-        return kept.join(" ").trim();
+        return { text: kept.join(" ").trim(), removed: sentences.length - kept.length, total: sentences.length };
       }
 
       function clean(entries) {
+        let fillerRemoved = 0, fillerTotal = 0;
         const filtered = entries
-          .map((e) => ({ ...e, text: removeFiller(e.text).replace(/^-\s*/, "").trim() }))
+          .map((e) => {
+            const { text, removed, total } = removeFiller(e.text);
+            fillerRemoved += removed;
+            fillerTotal += total;
+            return { ...e, text: text.replace(/^-\s*/, "").trim() };
+          })
           .filter((e) => e.text.length > 1);
 
         const merged = [];
@@ -302,7 +308,23 @@
             merged.push({ ...entry });
           }
         }
-        return merged;
+
+        const wc = (t) => t.split(/\s+/).filter(Boolean).length;
+        let hostWords = 0, guestWords = 0;
+        for (const row of merged) {
+          if (row.speaker === HOST) hostWords += wc(row.text);
+          else guestWords += wc(row.text);
+        }
+        const totalWords = hostWords + guestWords;
+
+        return {
+          rows: merged,
+          stats: {
+            fillerPct: fillerTotal > 0 ? Math.round(fillerRemoved / fillerTotal * 100) : 0,
+            hostPct: totalWords > 0 ? Math.round(hostWords / totalWords * 100) : 0,
+            guestPct: totalWords > 0 ? Math.round(guestWords / totalWords * 100) : 0,
+          },
+        };
       }
 
       function esc(s) {
@@ -400,7 +422,7 @@
               return;
             }
 
-            const rows = clean(entries);
+            const { rows, stats } = clean(entries);
             baseFilename = file.name.replace(/\.txt$/i, "");
 
             const guestNames = [...new Set(rows.filter((r) => r.speaker !== HOST).map((r) => r.speaker))];
@@ -409,7 +431,7 @@
 
             document.getElementById("preview").innerHTML = renderPreview(rows);
             document.body.classList.add("loaded");
-            setState("", `${rows.length} rows &middot; ${esc(file.name)} &middot; drop another file to replace`);
+            setState("", `${rows.length} rows &middot; ${stats.fillerPct}% fillers removed &middot; ${esc(HOST)}: ${stats.hostPct}% &middot; ${esc(labelName)}: ${stats.guestPct}% &middot; ${esc(file.name)}`);
           } catch (err) {
             setState("error", `Error: ${err.message}`);
           }
