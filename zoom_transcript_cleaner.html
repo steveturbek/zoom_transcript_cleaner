@@ -355,6 +355,7 @@
         "yeah.",
         "yep.",
         "yes.",
+        "you know.",
       ];
       const FILLERS = new Set(FILLER_LIST.map((f) => f.toLowerCase().trim()));
 
@@ -393,7 +394,7 @@
         const kept = sentences
           .filter((s) => !FILLERS.has(s.replace(/^-\s*/, "").toLowerCase().trim()))
           .map((s) => {
-            const stripped = s.replace(/^(?:um|uh)(?:,|…|\.\.\.)\s*/i, "");
+            const stripped = s.replace(/^(?:um|uh)(?:,|…|\.\.\.)\s*/i, "").replace(/^(?:you know,\s+)+/i, "");
             return stripped !== s ? stripped.charAt(0).toUpperCase() + stripped.slice(1) : s;
           })
           // Mid-sentence um/uh: ", um, you know" -> ", you know"; "took, um… a" / "but um, but" -> drop it;
@@ -401,7 +402,10 @@
           .map((s) =>
             s
               .replace(/,\s+(?:um|uh),(?=\s)/gi, ",")
-              .replace(/,?\s+(?:um|uh)\b(?!-)(\.\.\.|[,.…])?(?=\s|$)/gi, (m, p, off, str) => (off + m.length >= str.length && p && p !== "," ? p : "")),
+              .replace(/,?\s+(?:um|uh)\b(?!-)(\.\.\.|[,.…])?(?=\s|$)/gi, (m, p, off, str) => (off + m.length >= str.length && p && p !== "," ? p : ""))
+              // Comma-wrapped "like" / "you know" are filler, also back to back:
+              // "the story of, like, Beyond" -> "the story of Beyond"; "is, like, you know, everyone" -> "is everyone"
+              .replace(/(?:,\s+(?:like|you know))+,(?=\s)/gi, ""),
           );
         return kept.join(" ").trim();
       }
