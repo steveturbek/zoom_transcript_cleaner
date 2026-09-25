@@ -180,7 +180,7 @@
       <div id="dropzone">
         <div class="drop-icon">📄</div>
         <h1>Zoom Transcript Cleaner</h1>
-        <p id="status">Drop the <strong>Zoom meeting folder</strong> or <strong>meeting_saved_closed_caption.txt</strong> anywhere on this page</p>
+        <p id="status">Drop the <strong>Zoom meeting folder</strong> or its transcript <strong>.txt</strong> anywhere on this page</p>
       </div>
     </div>
 
@@ -199,7 +199,11 @@
 
     <script>
       const HOST = "Steve Turbek";
+      // Old format: "[Name] 13:36:28" line, then text lines
       const SPEAKER_LINE = /^\[(.+?)\]\s+\d+:\d+:\d+\s*$/;
+      // New format (2026): "14:03:10 --> 14:03:12" line, then "Name: text"
+      const TIME_RANGE_LINE = /^\d+:\d+:\d+(?:[.,]\d+)?\s*-->\s*\d+:\d+:\d+(?:[.,]\d+)?\s*$/;
+      const NAME_PREFIX = /^([^:]{1,80}?):\s+(.*)$/;
 
       const FILLERS = new Set([
         "absolutely.",
@@ -264,12 +268,22 @@
         const lines = raw.split(/\r?\n/);
         const entries = [];
         let current = null;
+        let afterTimeRange = false;
 
         for (const line of lines) {
           const m = line.match(SPEAKER_LINE);
           if (m) {
             if (current) entries.push(current);
             current = { speaker: m[1].trim(), parts: [] };
+            afterTimeRange = false;
+          } else if (TIME_RANGE_LINE.test(line)) {
+            if (current) entries.push(current);
+            current = null;
+            afterTimeRange = true;
+          } else if (afterTimeRange && line.trim()) {
+            const n = line.trim().match(NAME_PREFIX);
+            current = n ? { speaker: n[1].trim(), parts: [n[2]] } : { speaker: "Unknown", parts: [line.trim()] };
+            afterTimeRange = false;
           } else if (current && line.trim()) {
             current.parts.push(line.trim());
           }
