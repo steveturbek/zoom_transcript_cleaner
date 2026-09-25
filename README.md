@@ -11,6 +11,10 @@ A single HTML file that cleans up Zoom's `meeting_saved_closed_caption.txt` file
 - Merges consecutive lines from the same speaker
 - Displays the cleaned transcript on the page in interview style — your lines , guest lines normal — in an editable block you can rough-edit before exporting
 
+# Observations
+
+- Roughly one sentence in five is a filler reaction, but fillers are only about 3–4% of what was said. The status bar shows this word-based figure (filler sentences plus removed "um"s and "uh"s).
+
 ## Export options
 
 | Button              | What it does                                                                                                                                    |

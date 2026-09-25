@@ -233,6 +233,10 @@
         <input type="checkbox" id="filter-cb" checked />
         <span id="filter-label">Guest only</span>
       </label>
+      <label>
+        Host
+        <select id="host-select"></select>
+      </label>
     </div>
 
     <div id="preview-wrap">
@@ -240,7 +244,9 @@
     </div>
 
     <script>
-      const HOST = "Steve Turbek";
+      // Host is picked from the transcript's speakers; the choice is remembered in this browser
+      const HOST_KEY = "zoom-transcript-cleaner-host";
+      let loaded = null; // { rows, fillerPct, displayName }
       // Old format: "[Name] 13:36:28" line, then text lines
       const SPEAKER_LINE = /^\[(.+?)\]\s+\d+:\d+:\d+\s*$/;
       // New format (2026): "14:03:10 --> 14:03:12" line, then "Name: text"
@@ -395,24 +401,15 @@
           .map((s) =>
             s
               .replace(/,\s+(?:um|uh),(?=\s)/gi, ",")
-              .replace(/,?\s+(?:um|uh)\b(?!-)(\.\.\.|[,.…])?(?=\s|$)/gi, (m, p, off, str) =>
-                off + m.length >= str.length && p && p !== "," ? p : "",
-              ),
+              .replace(/,?\s+(?:um|uh)\b(?!-)(\.\.\.|[,.…])?(?=\s|$)/gi, (m, p, off, str) => (off + m.length >= str.length && p && p !== "," ? p : "")),
           );
-        return { text: kept.join(" ").trim(), removed: sentences.length - kept.length, total: sentences.length };
+        return kept.join(" ").trim();
       }
 
+      const wc = (t) => t.split(/\s+/).filter(Boolean).length;
+
       function clean(entries) {
-        let fillerRemoved = 0,
-          fillerTotal = 0;
-        const filtered = entries
-          .map((e) => {
-            const { text, removed, total } = removeFiller(e.text);
-            fillerRemoved += removed;
-            fillerTotal += total;
-            return { ...e, text: text.replace(/^-\s*/, "").trim() };
-          })
-          .filter((e) => e.text.length > 1);
+        const filtered = entries.map((e) => ({ ...e, text: removeFiller(e.text).replace(/^-\s*/, "").trim() })).filter((e) => e.text.length > 1);
 
         const merged = [];
         for (const entry of filtered) {
@@ -423,22 +420,27 @@
           }
         }
 
-        const wc = (t) => t.split(/\s+/).filter(Boolean).length;
-        let hostWords = 0,
-          guestWords = 0;
-        for (const row of merged) {
-          if (row.speaker === HOST) hostWords += wc(row.text);
-          else guestWords += wc(row.text);
-        }
-        const totalWords = hostWords + guestWords;
+        // Word-based: all spoken words before cleaning vs. after (filler sentences + um/uh)
+        const rawWords = entries.reduce((sum, e) => sum + wc(e.text), 0);
+        const cleanWords = merged.reduce((sum, r) => sum + wc(r.text), 0);
 
         return {
           rows: merged,
-          stats: {
-            fillerPct: fillerTotal > 0 ? Math.round((fillerRemoved / fillerTotal) * 100) : 0,
-            hostPct: totalWords > 0 ? Math.round((hostWords / totalWords) * 100) : 0,
-            guestPct: totalWords > 0 ? Math.round((guestWords / totalWords) * 100) : 0,
-          },
+          fillerPct: rawWords > 0 ? Math.round(((rawWords - cleanWords) / rawWords) * 100) : 0,
+        };
+      }
+
+      function talkSplit(rows, host) {
+        let hostWords = 0,
+          guestWords = 0;
+        for (const row of rows) {
+          if (row.speaker === host) hostWords += wc(row.text);
+          else guestWords += wc(row.text);
+        }
+        const total = hostWords + guestWords;
+        return {
+          hostPct: total > 0 ? Math.round((hostWords / total) * 100) : 0,
+          guestPct: total > 0 ? Math.round((guestWords / total) * 100) : 0,
         };
       }
 
@@ -446,11 +448,11 @@
         return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       }
 
-      function renderPreview(rows) {
+      function renderPreview(rows, host) {
         return rows
           .map((r) => {
             const line = `${esc(r.speaker)}: ${esc(r.text)}`;
-            return r.speaker === HOST ? `<p>${line}</p>` : `<p><strong>${line}</strong></p>`;
+            return r.speaker === host ? `<p>${line}</p>` : `<p><strong>${line}</strong></p>`;
           })
           .join("");
       }
@@ -523,6 +525,22 @@
         if (message) document.getElementById("status").innerHTML = message;
       }
 
+      function render() {
+        const { rows, fillerPct, displayName } = loaded;
+        const host = document.getElementById("host-select").value;
+        const { hostPct, guestPct } = talkSplit(rows, host);
+
+        const guestNames = [...new Set(rows.filter((r) => r.speaker !== host).map((r) => r.speaker))];
+        const labelName = guestNames.length === 1 ? guestNames[0] : "guests";
+        document.getElementById("filter-label").textContent = `Only: ${labelName}`;
+
+        document.getElementById("preview").innerHTML = renderPreview(rows, host);
+        setState(
+          "",
+          `${rows.length} speaker turns &middot; ${esc(host)}: ${hostPct}% &middot; ${esc(labelName)}: ${guestPct}% &middot; ${fillerPct}% of words were filler &middot; ${esc(displayName)}`,
+        );
+      }
+
       function processFile(file, folderName) {
         if (!file || !file.name.endsWith(".txt")) {
           setState("error", "Please drop a <strong>.txt</strong> file or Zoom folder");
@@ -538,20 +556,22 @@
               return;
             }
 
-            const { rows, stats } = clean(entries);
+            const { rows, fillerPct } = clean(entries);
             baseFilename = folderName || file.name.replace(/\.txt$/i, "");
-            const displayName = folderName ? `📁 ${folderName}` : file.name;
+            loaded = { rows, fillerPct, displayName: folderName ? `📁 ${folderName}` : file.name };
 
-            const guestNames = [...new Set(rows.filter((r) => r.speaker !== HOST).map((r) => r.speaker))];
-            const labelName = guestNames.length === 1 ? guestNames[0] : "guests";
-            document.getElementById("filter-label").textContent = `Only: ${labelName}`;
+            // Default host: last one picked in this browser if present, else the first speaker
+            const speakers = [...new Set(rows.map((r) => r.speaker))];
+            let saved = null;
+            try {
+              saved = localStorage.getItem(HOST_KEY);
+            } catch {}
+            const select = document.getElementById("host-select");
+            select.innerHTML = speakers.map((s) => `<option>${esc(s)}</option>`).join("");
+            select.value = speakers.includes(saved) ? saved : speakers[0];
 
-            document.getElementById("preview").innerHTML = renderPreview(rows);
+            render();
             document.body.classList.add("loaded");
-            setState(
-              "",
-              `${rows.length} rows &middot; ${stats.fillerPct}% fillers removed &middot; ${esc(HOST)}: ${stats.hostPct}% &middot; ${esc(labelName)}: ${stats.guestPct}% &middot; ${esc(displayName)}`,
-            );
           } catch (err) {
             setState("error", `Error: ${err.message}`);
           }
@@ -561,6 +581,12 @@
       }
 
       document.getElementById("copy-btn").addEventListener("click", handleCopyForAI);
+      document.getElementById("host-select").addEventListener("change", (e) => {
+        try {
+          localStorage.setItem(HOST_KEY, e.target.value);
+        } catch {}
+        if (loaded) render();
+      });
       document.getElementById("download-btn").addEventListener("click", handleDownload);
       document.getElementById("file-input").addEventListener("change", (e) => {
         processFile(e.target.files[0]);
