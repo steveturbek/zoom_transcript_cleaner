@@ -247,62 +247,110 @@
       const TIME_RANGE_LINE = /^\d+:\d+:\d+(?:[.,]\d+)?\s*-->\s*\d+:\d+:\d+(?:[.,]\d+)?\s*$/;
       const NAME_PREFIX = /^([^:]{1,80}?):\s+(.*)$/;
 
-      const FILLERS = new Set([
+      // Case-insensitive: entries are lowercased below, sentences are lowercased before lookup
+      const FILLER_LIST = [
         "absolutely.",
+        "ah, cool.",
         "all right!",
+        "all right, cool.",
+        "All right, uh…",
         "all right.",
+        "alright.",
+        "and so…",
+        "and, um…",
+        "And…",
         "awesome!",
         "awesome.",
+        "Beautiful.",
+        "Cool.",
         "Definitely.",
-        "That's fascinating.",
+        "exactly.",
+        "fantastic.",
+        "great.",
         "hmm!",
         "hmm, mm-hmm.",
         "hmm.",
         "hmm...",
         "hmm…",
-        "Nope.",
+        "huh.",
+        "Interesting.",
         "it's okay.",
+        "laughter.",
         "love it.",
-        "mm-hmm.",
         "Mm-hmm, sure.",
+        "mm-hmm.",
+        "Mmhm.",
+        "Nope.",
         "oh okay!",
         "oh okay.",
+        "Oh, awesome.",
+        "Oh, cool.",
         "oh, good point.",
+        "oh, great.",
+        "oh, nice.",
         "oh, okay!",
         "oh, okay.",
-        "oh, yeah.",
+        "Oh, that's awesome.",
+        "Oh, totally.",
         "oh, yeah, sure.",
+        "oh, yeah, yeah, yeah.",
+        "oh, yeah.",
+        "Oh.",
         "okay!",
         "okay, awesome.",
         "okay, hmm.",
         "okay, love it.",
         "okay, so…",
+        "okay, that's fine.",
         "okay, that's great.",
+        "Okay, yeah.",
         "okay.",
+        "ooh.",
+        "Right, right.",
         "right.",
         "right?",
-        "Right, right.",
         "so.",
         "so…",
         "sure!",
-        "sure.",
         "Sure, um…",
+        "sure.",
+        "that's awesome.",
+        "that's fantastic.",
+        "That's fascinating.",
+        "that's great.",
+        "that's insane.",
         "That's… that's awesome.",
         "totally good.",
+        "Totally.",
+        "uh-huh.",
         "um, so…",
+        "um.",
         "wow!",
+        "wow, okay.",
+        "wow, that's incredible.",
         "wow.",
         "yeah!",
         "yeah,",
         "yeah, absolutely.",
         "yeah, definitely.",
+        "yeah, exactly.",
         "yeah, go ahead.",
         "yeah, got it.",
+        "yeah, no, that's awesome.",
+        "yeah, same, same.",
+        "yeah, so…",
         "yeah, that's awesome.",
+        "yeah, that's cool.",
+        "yeah, that's nice.",
+        "yeah, well…",
+        "yeah, yeah, yeah, yeah.",
+        "yeah, yeah, yeah.",
+        "yeah, yeah.",
         "yeah.",
         "yep.",
         "yes.",
-      ]);
+      ];
+      const FILLERS = new Set(FILLER_LIST.map((f) => f.toLowerCase().trim()));
 
       let baseFilename = "transcript";
 
@@ -341,12 +389,22 @@
           .map((s) => {
             const stripped = s.replace(/^(?:um|uh)(?:,|…|\.\.\.)\s*/i, "");
             return stripped !== s ? stripped.charAt(0).toUpperCase() + stripped.slice(1) : s;
-          });
+          })
+          // Mid-sentence um/uh: ", um, you know" -> ", you know"; "took, um… a" / "but um, but" -> drop it;
+          // at sentence end keep the final punctuation: "and then, uh." -> "and then."
+          .map((s) =>
+            s
+              .replace(/,\s+(?:um|uh),(?=\s)/gi, ",")
+              .replace(/,?\s+(?:um|uh)\b(?!-)(\.\.\.|[,.…])?(?=\s|$)/gi, (m, p, off, str) =>
+                off + m.length >= str.length && p && p !== "," ? p : "",
+              ),
+          );
         return { text: kept.join(" ").trim(), removed: sentences.length - kept.length, total: sentences.length };
       }
 
       function clean(entries) {
-        let fillerRemoved = 0, fillerTotal = 0;
+        let fillerRemoved = 0,
+          fillerTotal = 0;
         const filtered = entries
           .map((e) => {
             const { text, removed, total } = removeFiller(e.text);
@@ -366,7 +424,8 @@
         }
 
         const wc = (t) => t.split(/\s+/).filter(Boolean).length;
-        let hostWords = 0, guestWords = 0;
+        let hostWords = 0,
+          guestWords = 0;
         for (const row of merged) {
           if (row.speaker === HOST) hostWords += wc(row.text);
           else guestWords += wc(row.text);
@@ -376,9 +435,9 @@
         return {
           rows: merged,
           stats: {
-            fillerPct: fillerTotal > 0 ? Math.round(fillerRemoved / fillerTotal * 100) : 0,
-            hostPct: totalWords > 0 ? Math.round(hostWords / totalWords * 100) : 0,
-            guestPct: totalWords > 0 ? Math.round(guestWords / totalWords * 100) : 0,
+            fillerPct: fillerTotal > 0 ? Math.round((fillerRemoved / fillerTotal) * 100) : 0,
+            hostPct: totalWords > 0 ? Math.round((hostWords / totalWords) * 100) : 0,
+            guestPct: totalWords > 0 ? Math.round((guestWords / totalWords) * 100) : 0,
           },
         };
       }
@@ -489,7 +548,10 @@
 
             document.getElementById("preview").innerHTML = renderPreview(rows);
             document.body.classList.add("loaded");
-            setState("", `${rows.length} rows &middot; ${stats.fillerPct}% fillers removed &middot; ${esc(HOST)}: ${stats.hostPct}% &middot; ${esc(labelName)}: ${stats.guestPct}% &middot; ${esc(displayName)}`);
+            setState(
+              "",
+              `${rows.length} rows &middot; ${stats.fillerPct}% fillers removed &middot; ${esc(HOST)}: ${stats.hostPct}% &middot; ${esc(labelName)}: ${stats.guestPct}% &middot; ${esc(displayName)}`,
+            );
           } catch (err) {
             setState("error", `Error: ${err.message}`);
           }
@@ -523,14 +585,17 @@
 
         if (entry && entry.isDirectory) {
           const folderName = entry.name;
-          entry.createReader().readEntries((children) => {
-            const txtEntry = children.find((c) => c.isFile && c.name.endsWith(".txt"));
-            if (!txtEntry) {
-              setState("error", "No .txt file found inside the dropped folder");
-              return;
-            }
-            txtEntry.file((file) => processFile(file, folderName));
-          }, () => setState("error", "Could not read the dropped folder"));
+          entry.createReader().readEntries(
+            (children) => {
+              const txtEntry = children.find((c) => c.isFile && c.name.endsWith(".txt"));
+              if (!txtEntry) {
+                setState("error", "No .txt file found inside the dropped folder");
+                return;
+              }
+              txtEntry.file((file) => processFile(file, folderName));
+            },
+            () => setState("error", "Could not read the dropped folder"),
+          );
         } else {
           processFile(e.dataTransfer.files[0]);
         }
