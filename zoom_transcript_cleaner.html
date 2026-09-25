@@ -37,6 +37,7 @@
 
       #dropzone {
         width: 480px;
+        max-width: 100%;
         padding: 60px 40px;
         background: #fff;
         border: 2.5px dashed #ccc;
@@ -90,6 +91,43 @@
         font-size: 13px;
         color: #666;
         line-height: 1.5;
+      }
+
+      #pick-btn {
+        display: inline-block;
+        margin-top: 16px;
+        padding: 6px 16px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 13px;
+        color: #333;
+        background: #fff;
+        cursor: pointer;
+      }
+
+      body.loaded #pick-btn {
+        margin-top: 6px;
+      }
+
+      /* === Phone layout === */
+      @media (max-width: 600px) {
+        #drop-area {
+          padding: 16px;
+        }
+        #toolbar {
+          flex-wrap: wrap;
+          padding: 8px 16px;
+          gap: 8px;
+        }
+        body.loaded #dropzone {
+          padding: 9px 16px;
+        }
+        #download-btn {
+          margin-left: 0;
+        }
+        #preview-wrap {
+          padding: 20px 16px;
+        }
       }
 
       /* === Toolbar === */
@@ -181,6 +219,10 @@
         <div class="drop-icon">📄</div>
         <h1>Zoom Transcript Cleaner</h1>
         <p id="status">Drop the <strong>Zoom meeting folder</strong> or its transcript <strong>.txt</strong> anywhere on this page</p>
+        <label id="pick-btn">
+          Choose file…
+          <input type="file" id="file-input" accept=".txt,text/plain" hidden />
+        </label>
       </div>
     </div>
 
@@ -382,8 +424,9 @@
 
         navigator.clipboard.writeText(prompt).then(() => {
           const btn = document.getElementById("copy-btn");
+          const label = btn.dataset.label || (btn.dataset.label = btn.textContent);
           btn.textContent = "Copied!";
-          setTimeout(() => (btn.textContent = "Copy for AI"), 2000);
+          setTimeout(() => (btn.textContent = label), 2000);
         });
       }
 
@@ -457,6 +500,10 @@
 
       document.getElementById("copy-btn").addEventListener("click", handleCopyForAI);
       document.getElementById("download-btn").addEventListener("click", handleDownload);
+      document.getElementById("file-input").addEventListener("change", (e) => {
+        processFile(e.target.files[0]);
+        e.target.value = "";
+      });
 
       document.addEventListener("dragover", (e) => {
         e.preventDefault();
